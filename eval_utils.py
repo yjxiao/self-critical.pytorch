@@ -174,7 +174,12 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         with torch.no_grad():
             tmp_eval_kwargs = eval_kwargs.copy()
             tmp_eval_kwargs.update({'sample_n': 1})
-            seq, seq_logprobs = model(fc_feats, att_feats, att_masks, opt=tmp_eval_kwargs, mode='sample')
+            results = model(fc_feats, att_feats, att_masks, opt=tmp_eval_kwargs, mode='sample')
+            if len(results) == 2:    # single models
+                seq, seq_logprobs = results
+                seq_aleatorics, seq_epistemics = None, None
+            else:    # ensemble with uncertainty estimates
+                seq, seq_logprobs, seq_aleatorics, seq_epistemics = results
             seq = seq.data
             entropy = - (F.softmax(seq_logprobs, dim=2) * seq_logprobs).sum(2).sum(1) / ((seq>0).float().sum(1)+1)
             perplexity = - seq_logprobs.gather(2, seq.unsqueeze(2)).squeeze(2).sum(1) / ((seq>0).float().sum(1)+1)
@@ -187,7 +192,16 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         sents = utils.decode_sequence(loader.get_vocab(), seq)
 
         for k, sent in enumerate(sents):
-            entry = {'image_id': data['infos'][k]['id'], 'caption': sent, 'perplexity': perplexity[k].item(), 'entropy': entropy[k].item()}
+            entry = {
+                'image_id': data['infos'][k]['id'],
+                'caption': sent,
+                'perplexity': perplexity[k].item(),
+                'entropy': entropy[k].item(),
+            }
+            if seq_aleatorics is not None and seq_epistemics is not None:
+                entry['aleatorics'] = seq_aleatorics[k][:len(sent.split())+1].tolist()
+                entry['epistemics'] = seq_epistemics[k][:len(sent.split())+1].tolist()
+                
             if eval_kwargs.get('dump_path', 0) == 1:
                 entry['file_name'] = data['infos'][k]['file_path']
             predictions.append(entry)

@@ -48,7 +48,7 @@ class CaptionModel(nn.Module):
 
         def beam_step(logprobsf, unaug_logprobsf, beam_size, t, beam_seq, beam_seq_logprobs, beam_logprobs_sum, state):
             #INPUTS:
-            #logprobsf: probabilities augmented after diversity
+            #logprobsf: probabilities augmented after diversity (beam_size, vocab_size)
             #beam_size: obvious
             #t        : time instant
             #beam_seq : tensor contanining the beams
@@ -58,8 +58,7 @@ class CaptionModel(nn.Module):
             #beam_seq : tensor containing the word indices of the decoded captions
             #beam_seq_logprobs : log-probability of each decision made, same size as beam_seq
             #beam_logprobs_sum : joint log-probability of each beam
-
-            ys,ix = torch.sort(logprobsf,1,True)
+            ys,ix = torch.sort(logprobsf, 1, True)
             candidates = []
             cols = min(beam_size, ys.size(1))
             rows = beam_size
@@ -68,11 +67,11 @@ class CaptionModel(nn.Module):
             for c in range(cols): # for each column (word, essentially)
                 for q in range(rows): # for each beam expansion
                     #compute logprob of expanding beam q with word in (sorted) position c
-                    local_logprob = ys[q,c].item()
+                    local_logprob = ys[q, c].item()
                     candidate_logprob = beam_logprobs_sum[q] + local_logprob
                     # local_unaug_logprob = unaug_logprobsf[q,ix[q,c]]
-                    candidates.append({'c':ix[q,c], 'q':q, 'p':candidate_logprob, 'r':unaug_logprobsf[q]})
-            candidates = sorted(candidates,  key=lambda x: -x['p'])
+                    candidates.append({'c': ix[q, c], 'q': q, 'p': candidate_logprob, 'r': unaug_logprobsf[q]})
+            candidates = sorted(candidates, key=lambda x: -x['p'])
             
             new_state = [_.clone() for _ in state]
             #beam_seq_prev, beam_seq_logprobs_prev
