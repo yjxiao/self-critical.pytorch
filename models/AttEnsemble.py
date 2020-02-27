@@ -114,7 +114,6 @@ class AttEnsemble(AttModel):
             return unaug_logprobsf
 
         # does one step of classical beam search
-
         def beam_step(logprobsf, unaug_logprobsf, aleatorics, epistemics, beam_size, t, beam_seq, beam_seq_logprobs, beam_logprobs_sum, beam_seq_al, beam_seq_ep, state):
             #INPUTS:
             #logprobsf: probabilities augmented after diversity (beam_size, vocab_size)
@@ -182,6 +181,7 @@ class AttEnsemble(AttModel):
         beam_size = opt.get('beam_size', 10)
         group_size = opt.get('group_size', 1)
         diversity_lambda = opt.get('diversity_lambda', 0.5)
+        uncertainty_lambda = opt.get('uncertainty_lambda', 0)
         decoding_constraint = opt.get('decoding_constraint', 0)
         remove_bad_endings = opt.get('remove_bad_endings', 0)
         suppress_UNK = opt.get('suppress_UNK', 0)
@@ -194,15 +194,15 @@ class AttEnsemble(AttModel):
         beam_logprobs_sum_table = [torch.zeros(bdash) for _ in range(group_size)]
         beam_seq_aleatorics_table = [torch.FloatTensor(self.seq_length, bdash).zero_() for _ in range(group_size)]
         beam_seq_epistemics_table = [torch.FloatTensor(self.seq_length, bdash).zero_() for _ in range(group_size)]        
-        # logprobs # logprobs predicted in last time step, shape (beam_size, vocab_size+1)
         done_beams_table = [[] for _ in range(group_size)]
         # state_table = [list(torch.unbind(_)) for _ in torch.stack(init_state).chunk(group_size, 2)]
-        state_table = list(zip(*[_.chunk(group_size, 1) for _ in init_state]))
+        state_table = list(zip(*[_.chunk(group_size, 1) for _ in init_state]))  
+        # logprobs # logprobs predicted in last time step, shape (beam_size, vocab_size+1)
         logprobs_table = list(init_logprobs.chunk(group_size, 0))
         # [(beam_size,)]
         aleatorics_table = list(init_aleatorics.chunk(group_size, 0))
         epistemics_table = list(init_epistemics.chunk(group_size, 0))        
-        # END INIT
+        # END INITn
 
         # Chunk elements in the args
         args = list(args)
@@ -230,11 +230,14 @@ class AttEnsemble(AttModel):
                     # the function directly modifies the logprobsf values and hence, we need to return
                     # the unaugmented ones for sorting the candidates in the end. # for historical
                     # reasons :-)
-                    unaug_logprobsf = add_diversity(beam_seq_table,logprobsf,t,divm,diversity_lambda,bdash)
+                    unaug_logprobsf = add_diversity(beam_seq_table, logprobsf, t, divm, diversity_lambda, bdash)
                     
                     # get current uncertainties
                     aleatorics = aleatorics_table[divm]
                     epistemics = epistemics_table[divm]
+
+                    # add uncertainty
+                    logprobsf = logprobsf - uncertainty_lambda * epistemics.unsqueeze(-1)
                     
                     # infer new beams
                     beam_seq_table[divm],\

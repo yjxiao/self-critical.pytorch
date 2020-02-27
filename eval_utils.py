@@ -167,8 +167,8 @@ def eval_split(model, crit, loader, eval_kwargs={}):
         # forward the model to also get generated samples for each image
         # Only leave one feature for each image, in case duplicate sample
         tmp = [data['fc_feats'], 
-            data['att_feats'],
-            data['att_masks']]
+               data['att_feats'],
+               data['att_masks']]
         tmp = [_.cuda() if _ is not None else _ for _ in tmp]
         fc_feats, att_feats, att_masks = tmp
         with torch.no_grad():
@@ -181,8 +181,10 @@ def eval_split(model, crit, loader, eval_kwargs={}):
             else:    # ensemble with uncertainty estimates
                 seq, seq_logprobs, seq_aleatorics, seq_epistemics = results
             seq = seq.data
+            # seq_logprobs: (batch_size, max_length, vocab_size)
+            cand_seq_logprobs = seq_logprobs.gather(2, seq.unsqueeze(2)).squeeze(2)
             entropy = - (F.softmax(seq_logprobs, dim=2) * seq_logprobs).sum(2).sum(1) / ((seq>0).float().sum(1)+1)
-            perplexity = - seq_logprobs.gather(2, seq.unsqueeze(2)).squeeze(2).sum(1) / ((seq>0).float().sum(1)+1)
+            perplexity = - cand_seq_logprobs.sum(1) / ((seq>0).float().sum(1)+1)
         
         # Print beam search
         if beam_size > 1 and verbose_beam:
@@ -197,6 +199,7 @@ def eval_split(model, crit, loader, eval_kwargs={}):
                 'caption': sent,
                 'perplexity': perplexity[k].item(),
                 'entropy': entropy[k].item(),
+                'logprobs': cand_seq_logprobs[k][:len(sent.split())+1].tolist(),
             }
             if seq_aleatorics is not None and seq_epistemics is not None:
                 entry['aleatorics'] = seq_aleatorics[k][:len(sent.split())+1].tolist()

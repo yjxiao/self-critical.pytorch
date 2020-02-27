@@ -251,6 +251,8 @@ def add_eval_options(parser):
                     help='used for diverse beam search. if group_size is 1, then it\'s normal beam search')
     parser.add_argument('--diversity_lambda', type=float, default=0.5,
                     help='used for diverse beam search. Usually from 0.2 to 0.8. Higher value of lambda produces a more diverse list')
+    parser.add_argument('--uncertainty_lambda', type=float, default=0,
+                    help='used for uncertainty restricted beam search. Higher value of lambda produces more certain candidates')
     parser.add_argument('--temperature', type=float, default=1.0,
                     help='temperature when sampling from distributions (i.e. when sample_method = sample). Lower = "safer" predictions.')
     parser.add_argument('--decoding_constraint', type=int, default=0,
